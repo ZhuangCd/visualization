@@ -138,7 +138,7 @@ app.index_string = """
 </html>
 """
 
-MAP_CONFIG = {"displaylogo": False}
+MAP_CONFIG = {"displaylogo": False, "displayModeBar": False}
 TREND_CONFIG = {"displayModeBar": False, "staticPlot": True}
 
 app.layout = html.Div(
