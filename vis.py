@@ -119,7 +119,11 @@ app.layout = html.Div([
         )
     ]),
 
-    dcc.Graph(id="world_map", figure=default_world_map_fig, style={"marginBottom": "30px"}),
+    dcc.Graph(
+        id="world_map",
+        figure=default_world_map_fig,
+        style={"marginBottom": "0px", "paddingBottom": "0px"}
+    ),
 
     html.Div([
         html.Label("Display mode:", style={"fontSize": 18}),
@@ -146,10 +150,10 @@ app.layout = html.Div([
         )
     ], id="single_selector_div"),
 
-    dcc.Graph(id="trend_chart"),
+    dcc.Graph(id="trend_chart", style={"marginBottom": "-5px"}),
 
     html.Div([
-        html.Label("Select Year:", style={"fontSize": 18}),
+        html.Label("Select Year:", style={"fontSize": 18, "marginBottom": "4px"}),
         dcc.Slider(
             id="year_slider",
             min=min_year if min_year is not None else 0,
@@ -160,7 +164,7 @@ app.layout = html.Div([
             step=1,
             tooltip={"always_visible": False, "placement": "bottom"}
         )
-    ], style={"marginTop": "30px"})
+    ], style={"marginTop": "-25px", "paddingTop": "0px", "marginBottom": "0px", "paddingBottom": "0px"})
 ])
 
 
@@ -200,7 +204,6 @@ def update_chart(mode, selected_ideology):
             x="year",
             y="count",
             title=f"{selected_ideology.capitalize()} Governments Over Time",
-            labels={"count": "Number of Countries"},
             color_discrete_sequence=[color_map[selected_ideology]],
             opacity=0.75
         )
@@ -210,7 +213,14 @@ def update_chart(mode, selected_ideology):
             line=dict(color=color_map[selected_ideology])
         ).data)
 
-        fig.update_layout(template="plotly_white")
+        fig.update_layout(
+            template="plotly_white",
+            margin=dict(l=60, r=30, t=60, b=10),
+            xaxis_title=None,
+            yaxis_title=None
+        )
+        fig.update_xaxes(showticklabels=False)
+        fig.update_yaxes(showticklabels=False)
         return fig, dropdown_style
 
     else:
@@ -227,11 +237,18 @@ def update_chart(mode, selected_ideology):
             color="hog_ideology",
             barmode="group",
             title="All Ideologies Over Time (Side-by-Side Bars)",
-            labels={"count": "Number of Countries", "hog_ideology": "Ideology"},
             color_discrete_map=color_map
         )
 
-        fig.update_layout(template="plotly_white")
+        fig.update_layout(
+            template="plotly_white",
+            margin=dict(l=60, r=30, t=60, b=10),
+            xaxis_title=None,
+            yaxis_title=None,
+            legend_title_text="Ideology"
+        )
+        fig.update_xaxes(showticklabels=False)
+        fig.update_yaxes(showticklabels=False)
         return fig, dropdown_style
 
 
