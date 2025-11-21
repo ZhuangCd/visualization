@@ -57,7 +57,6 @@ def make_world_map(selected_region="all", selected_year=None, democracy_filter="
 
     if not filtered.empty:
         year_label = selected_year if selected_year is not None else "latest available"
-        title_text = f"Head-of-Government Ideology by Country (year: {year_label})"
         fig = px.choropleth(
             filtered,
             locations="country_name",
@@ -66,7 +65,6 @@ def make_world_map(selected_region="all", selected_year=None, democracy_filter="
             hover_name="country_name",
             hover_data={"year": True, "region": True},
             color_discrete_map=color_map,
-            title=title_text,
         )
 
         fig.update_geos(
@@ -80,7 +78,8 @@ def make_world_map(selected_region="all", selected_year=None, democracy_filter="
         fig.update_layout(
             width=1000,
             height=600,
-            margin=dict(l=0, r=0, t=50, b=0)
+            margin=dict(l=0, r=0, t=10, b=0),
+            showlegend=False
         )
         return fig
 
@@ -93,8 +92,7 @@ def make_world_map(selected_region="all", selected_year=None, democracy_filter="
         locationmode="country names",
         size="Count",
         hover_name="Country",
-        size_max=40,
-        title="Records per Country"
+            size_max=40
     )
 
     fig.update_geos(showland=True, landcolor="#e0e0e0")
@@ -102,7 +100,8 @@ def make_world_map(selected_region="all", selected_year=None, democracy_filter="
     fig.update_layout(
         width=1000,
         height=600,
-        margin=dict(l=0, r=0, t=50, b=0)
+        margin=dict(l=0, r=0, t=10, b=0),
+        showlegend=False
     )
     return fig
 
@@ -323,7 +322,6 @@ def update_chart(mode, selected_ideology, selected_region, selected_democracy):
             yearly_counts,
             x="year",
             y="count",
-            title=f"{selected_ideology.capitalize()} Governments Over Time",
             color_discrete_sequence=[color_map[selected_ideology]],
             opacity=0.75
         )
@@ -335,9 +333,10 @@ def update_chart(mode, selected_ideology, selected_region, selected_democracy):
 
         fig.update_layout(
             template="plotly_white",
-            margin=dict(l=60, r=30, t=60, b=10),
+            margin=dict(l=60, r=30, t=20, b=10),
             xaxis_title=None,
-            yaxis_title=None
+            yaxis_title=None,
+            title=None
         )
         fig.update_xaxes(showticklabels=False, fixedrange=True)
         fig.update_yaxes(showticklabels=False, fixedrange=True)
@@ -356,16 +355,16 @@ def update_chart(mode, selected_ideology, selected_region, selected_democracy):
             y="count",
             color="hog_ideology",
             barmode="group",
-            title="All Ideologies Over Time (Side-by-Side Bars)",
             color_discrete_map=color_map
         )
 
         fig.update_layout(
             template="plotly_white",
-            margin=dict(l=60, r=30, t=60, b=10),
+            margin=dict(l=60, r=30, t=20, b=10),
             xaxis_title=None,
             yaxis_title=None,
-            legend_title_text="Ideology"
+            legend_title_text="Ideology",
+            title=None
         )
         fig.update_xaxes(showticklabels=False, fixedrange=True)
         fig.update_yaxes(showticklabels=False, fixedrange=True)
