@@ -26,12 +26,12 @@ color_map = {
     "centrist": "#b094b0",
     "rightist": "#db231d",
 }
-FONT_FAMILY = "ABCMonumentGrotesk, Helvetica, Arial, sans-serif"
-RADIO_LABEL_STYLE = {
+FONT_FAMILY = "Omega, Arial, sans-serif"
+CHOICE_LABEL_STYLE = {
     "display": "flex",
     "alignItems": "center",
     "gap": "8px",
-    "padding": "2px 0",
+    "padding": "4px 0",
     "lineHeight": "1.3",
 }
 
@@ -52,13 +52,19 @@ year_marks = {
 }
 
 
+def _resolve_regions(selection):
+    if not selection or "all" in selection:
+        return None
+    return selection
+
+
 # --------------------------------------
 # Figure factories
 # --------------------------------------
-def make_world_map(selected_region="all", selected_year=None, democracy_filter="all"):
+def make_world_map(selected_regions=None, selected_year=None, democracy_filter="all"):
     filtered = map_df
-    if selected_region and selected_region != "all":
-        filtered = filtered[filtered["region"] == selected_region]
+    if selected_regions:
+        filtered = filtered[filtered["region"].isin(selected_regions)]
     if democracy_filter and democracy_filter != "all":
         filtered = filtered[filtered["democracy_flag"] == democracy_filter]
     if selected_year is not None:
@@ -92,7 +98,7 @@ def make_world_map(selected_region="all", selected_year=None, democracy_filter="
         countrycolor="#ffffff",
         showframe=False,
     )
-    if selected_region and selected_region != "all":
+    if selected_regions:
         fig.update_geos(fitbounds="locations")
     else:
         fig.update_geos(fitbounds=None)
@@ -115,7 +121,6 @@ def make_trend_chart(filtered_df, mode, selected_ideology):
             color_discrete_sequence=[color_map[selected_ideology]],
             opacity=0.75,
         )
-       
     else:
         grouped = filtered_df[filtered_df["hog_ideology"].isin(valid_ideologies)]
         grouped = grouped.groupby(["year", "hog_ideology"]).size().reset_index(name="count")
@@ -169,7 +174,11 @@ def build_color_legend_items():
 
 
 def build_sidebar():
-    region_options = ["all"] + sorted(map_df["region"].dropna().unique())
+    region_values = sorted(map_df["region"].dropna().unique())
+    region_options = [{"label": "All", "value": "all"}] + [
+        {"label": region.title(), "value": region}
+        for region in region_values
+    ]
     democracy_options = [
         {"label": "All regimes", "value": "all"},
         {"label": "Democracies", "value": "yes"},
@@ -181,7 +190,6 @@ def build_sidebar():
         style={
             "width": "15%",
             "minWidth": "230px",
-            "backgroundColor": "#ffffff",
             "padding": "20px",
             "boxShadow": "2px 0 12px rgba(0,0,0,0.08)",
             "display": "flex",
@@ -196,11 +204,12 @@ def build_sidebar():
             html.H2("Global Ideologies", style={"margin": "0"}),
             html.Div([
                 html.Label("Region", style={"fontSize": 16}),
-                dcc.RadioItems(
+                dcc.Checklist(
                     id="region_selector",
-                    options=[{"label": r, "value": r} for r in region_options],
-                    value="all",
-                    labelStyle=RADIO_LABEL_STYLE,
+                    options=region_options,
+                    value=["all"],
+                    labelStyle=CHOICE_LABEL_STYLE,
+                    inputStyle={"marginRight": "4px"},
                 ),
             ]),
             html.Div([
@@ -209,7 +218,7 @@ def build_sidebar():
                     id="democracy_selector",
                     options=democracy_options,
                     value="all",
-                    labelStyle=RADIO_LABEL_STYLE,
+                    labelStyle=CHOICE_LABEL_STYLE,
                 ),
             ]),
             html.Div([
@@ -221,7 +230,7 @@ def build_sidebar():
                         {"label": "All Ideologies", "value": "all"},
                     ],
                     value="single",
-                    labelStyle=RADIO_LABEL_STYLE,
+                    labelStyle=CHOICE_LABEL_STYLE,
                 ),
             ]),
             html.Div(
@@ -232,7 +241,7 @@ def build_sidebar():
                         id="ideology_selector",
                         options=[{"label": ide.capitalize(), "value": ide} for ide in valid_ideologies],
                         value="leftist",
-                        labelStyle=RADIO_LABEL_STYLE,
+                        labelStyle=CHOICE_LABEL_STYLE,
                     ),
                 ],
             ),
@@ -367,9 +376,10 @@ app.layout = html.Div(
     Input("democracy_selector", "value"),
     Input("year_slider", "value"),
 )
-def update_world_map(selected_region, selected_democracy, selected_year):
+def update_world_map(selected_regions, selected_democracy, selected_year):
+    regions = _resolve_regions(selected_regions)
     year_value = int(selected_year) if selected_year is not None else max_year
-    return make_world_map(selected_region, year_value, selected_democracy)
+    return make_world_map(regions, year_value, selected_democracy)
 
 
 @app.callback(
@@ -380,12 +390,13 @@ def update_world_map(selected_region, selected_democracy, selected_year):
     Input("region_selector", "value"),
     Input("democracy_selector", "value"),
 )
-def update_chart(mode, selected_ideology, selected_region, selected_democracy):
+def update_chart(mode, selected_ideology, selected_regions, selected_democracy):
     dropdown_style = {"display": "block"} if mode == "single" else {"display": "none"}
 
     filtered = df.copy()
-    if selected_region and selected_region != "all":
-        filtered = filtered[filtered["region"] == selected_region]
+    regions = _resolve_regions(selected_regions)
+    if regions:
+        filtered = filtered[filtered["region"].isin(regions)]
     if selected_democracy and selected_democracy != "all":
         filtered = filtered[filtered["democracy_flag"] == selected_democracy]
 
