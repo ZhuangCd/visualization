@@ -7,9 +7,16 @@ from dash import Dash, dcc, html, Input, Output
 # --------------------------------------
 raw_df = pd.read_csv("global_leader_ideologies.csv")
 
-df = raw_df[["year", "hog_ideology"]]
+def normalize_democracy(series):
+    normalized = series.astype(str).str.strip().str.lower()
+    return normalized.where(normalized.isin(["yes", "no"]), "no data")
+
+
+df = raw_df[["year", "hog_ideology", "region", "democracy"]].copy()
 df["hog_ideology"] = df["hog_ideology"].str.lower()
 df["year"] = pd.to_numeric(df["year"], errors="coerce").astype("Int64")
+df["region"] = df["region"].fillna("Unknown")
+df["democracy_flag"] = normalize_democracy(df["democracy"]) 
 
 valid_ideologies = ["leftist", "centrist", "rightist"]
 
@@ -23,10 +30,11 @@ color_map = {
 # --------------------------------------
 # Default world map plot
 # --------------------------------------
-map_df = raw_df[["country_name", "hog_ideology", "year", "region"]].copy()
+map_df = raw_df[["country_name", "hog_ideology", "year", "region", "democracy"]].copy()
 map_df["hog_ideology"] = map_df["hog_ideology"].str.lower()
 map_df["year"] = pd.to_numeric(map_df["year"], errors="coerce").astype("Int64")
 map_df = map_df[map_df["hog_ideology"].isin(valid_ideologies)]
+map_df["democracy_flag"] = normalize_democracy(map_df["democracy"])
 map_df = map_df.drop_duplicates(subset=["country_name", "year"], keep="last")
 
 available_years = sorted(map_df["year"].dropna().unique())
@@ -38,12 +46,14 @@ year_marks = {
     if y == min_year or y == max_year or int(y) % 10 == 0
 }
 
-def make_world_map(selected_region="all", selected_year=None):
+def make_world_map(selected_region="all", selected_year=None, democracy_filter="all"):
     filtered = map_df
     if selected_region and selected_region != "all":
-        filtered = map_df[map_df["region"] == selected_region]
+        filtered = filtered[filtered["region"] == selected_region]
     if selected_year is not None:
         filtered = filtered[filtered["year"] == selected_year]
+    if democracy_filter and democracy_filter != "all":
+        filtered = filtered[filtered["democracy_flag"] == democracy_filter]
 
     if not filtered.empty:
         year_label = selected_year if selected_year is not None else "latest available"
@@ -99,73 +109,153 @@ def make_world_map(selected_region="all", selected_year=None):
 default_world_map_fig = make_world_map(selected_year=max_year)
 
 region_options = ["all"] + sorted(map_df["region"].dropna().unique())
+democracy_options = [
+    {"label": "All regimes", "value": "all"},
+    {"label": "Democracies", "value": "yes"},
+    {"label": "Non-democracies", "value": "no"},
+]
 
 # --------------------------------------
 # Build Dash app
 # --------------------------------------
 app = Dash(__name__)
 
-app.layout = html.Div([
-    html.H1("Political Ideology Trends Over Time", style={"textAlign": "center"}),
+MAP_CONFIG = {"displaylogo": False}
+TREND_CONFIG = {"displayModeBar": False, "staticPlot": True}
 
-    html.Div([
-        html.Label("Filter by Region:", style={"fontSize": 18}),
-        dcc.Dropdown(
-            id="region_selector",
-            options=[{"label": r, "value": r} for r in region_options],
-            value="all",
-            clearable=False,
-            style={"width": "40%", "marginBottom": "20px"}
+app.layout = html.Div(
+    style={
+        "display": "flex",
+        "height": "100vh",
+        "width": "100vw",
+        "margin": "0",
+        "overflow": "hidden",
+        "backgroundColor": "#edf1f5"
+    },
+    children=[
+        html.Div(
+            id="sidebar",
+            style={
+                "width": "15%",
+                "minWidth": "220px",
+                "backgroundColor": "#ffffff",
+                "padding": "20px",
+                "boxShadow": "2px 0 12px rgba(0,0,0,0.08)",
+                "display": "flex",
+                "flexDirection": "column",
+                "gap": "20px",
+                "overflowY": "auto"
+            },
+            children=[
+                html.H2("Global Ideologies", style={"margin": "0"}),
+                html.P(
+                    "Use the controls below to focus the map and histogram.",
+                    style={"margin": "0", "color": "#6c757d"}
+                ),
+                html.Div([
+                    html.Label("Continent / Region", style={"fontSize": 16}),
+                    dcc.Dropdown(
+                        id="region_selector",
+                        options=[{"label": r, "value": r} for r in region_options],
+                        value="all",
+                        clearable=False,
+                        style={"width": "100%"}
+                    )
+                ]),
+                html.Div([
+                    html.Label("Regime Type", style={"fontSize": 16}),
+                    dcc.RadioItems(
+                        id="democracy_selector",
+                        options=democracy_options,
+                        value="all",
+                        labelStyle={"display": "block", "marginBottom": "6px"}
+                    )
+                ]),
+                html.Div([
+                    html.Label("Display Mode", style={"fontSize": 16}),
+                    dcc.RadioItems(
+                        id="mode",
+                        options=[
+                            {"label": "Single Ideology", "value": "single"},
+                            {"label": "All Ideologies", "value": "all"},
+                        ],
+                        value="single",
+                        labelStyle={"display": "block", "marginBottom": "6px"}
+                    )
+                ]),
+                html.Div(
+                    id="single_selector_div",
+                    children=[
+                        html.Label("Select Ideology", style={"fontSize": 16}),
+                        dcc.Dropdown(
+                            id="ideology_selector",
+                            options=[{"label": ide.capitalize(), "value": ide} for ide in valid_ideologies],
+                            value="leftist",
+                            clearable=False,
+                            style={"width": "100%"}
+                        )
+                    ]
+                )
+            ]
+        ),
+        html.Div(
+            id="main_panel",
+            style={
+                "width": "85%",
+                "height": "100%",
+                "display": "flex",
+                "flexDirection": "column",
+                "overflow": "hidden"
+            },
+            children=[
+                html.Div(
+                    id="map_container",
+                    style={
+                        "flex": "1 1 60%",
+                        "padding": "20px 30px 10px 30px",
+                        "height": "60%"
+                    },
+                    children=dcc.Graph(
+                        id="world_map",
+                        figure=default_world_map_fig,
+                        config=MAP_CONFIG,
+                        style={"height": "100%", "width": "100%", "borderRadius": "8px"}
+                    )
+                ),
+                html.Div(
+                    id="histogram_container",
+                    style={
+                        "flex": "0 0 40%",
+                        "padding": "0 30px 20px 30px",
+                        "display": "flex",
+                        "flexDirection": "column",
+                        "height": "40%"
+                    },
+                    children=[
+                        dcc.Graph(
+                            id="trend_chart",
+                            config=TREND_CONFIG,
+                            style={"height": "calc(100% - 60px)", "width": "100%"}
+                        ),
+                        html.Div([
+                            html.Label("Select Year", style={"fontSize": 16, "marginBottom": "4px"}),
+                            dcc.Slider(
+                                id="year_slider",
+                                min=min_year if min_year is not None else 0,
+                                max=max_year if max_year is not None else 0,
+                                value=max_year if max_year is not None else 0,
+                                included=False,
+                                marks=year_marks if year_marks else {},
+                                step=1,
+                                tooltip={"always_visible": False, "placement": "bottom"}
+                            )
+                        ], style={"paddingTop": "10px"})
+                    ]
+                )
+            ]
         )
-    ]),
-
-    dcc.Graph(
-        id="world_map",
-        figure=default_world_map_fig,
-        style={"marginBottom": "0px", "paddingBottom": "0px"}
-    ),
-
-    html.Div([
-        html.Label("Display mode:", style={"fontSize": 18}),
-        dcc.RadioItems(
-            id="mode",
-            options=[
-                {"label": "Single Ideology", "value": "single"},
-                {"label": "All Ideologies", "value": "all"},
-            ],
-            value="single",
-            inline=True,
-            style={"marginBottom": "20px"}
-        )
-    ]),
-
-    html.Div([
-        html.Label("Select Ideology:", style={"fontSize": 18}),
-        dcc.Dropdown(
-            id="ideology_selector",
-            options=[{"label": ide.capitalize(), "value": ide} for ide in valid_ideologies],
-            value="leftist",
-            clearable=False,
-            style={"width": "40%"}
-        )
-    ], id="single_selector_div"),
-
-    dcc.Graph(id="trend_chart", style={"marginBottom": "-5px"}),
-
-    html.Div([
-        html.Label("Select Year:", style={"fontSize": 18, "marginBottom": "4px"}),
-        dcc.Slider(
-            id="year_slider",
-            min=min_year if min_year is not None else 0,
-            max=max_year if max_year is not None else 0,
-            value=max_year if max_year is not None else 0,
-            included=False,
-            marks=year_marks if year_marks else {},
-            step=1,
-            tooltip={"always_visible": False, "placement": "bottom"}
-        )
-    ], style={"marginTop": "-25px", "paddingTop": "0px", "marginBottom": "0px", "paddingBottom": "0px"})
-])
+    ]
+)
 
 
 # --------------------------------------
@@ -174,11 +264,12 @@ app.layout = html.Div([
 @app.callback(
     Output("world_map", "figure"),
     Input("region_selector", "value"),
+    Input("democracy_selector", "value"),
     Input("year_slider", "value"),
 )
-def update_world_map(selected_region, selected_year):
+def update_world_map(selected_region, selected_democracy, selected_year):
     year_value = int(selected_year) if selected_year is not None else max_year
-    return make_world_map(selected_region, year_value)
+    return make_world_map(selected_region, year_value, selected_democracy)
 
 
 @app.callback(
@@ -186,18 +277,26 @@ def update_world_map(selected_region, selected_year):
     Output("single_selector_div", "style"),
     Input("mode", "value"),
     Input("ideology_selector", "value"),
+    Input("region_selector", "value"),
+    Input("democracy_selector", "value"),
 )
-def update_chart(mode, selected_ideology):
+def update_chart(mode, selected_ideology, selected_region, selected_democracy):
 
     # Hide dropdown when "all" mode is used
     dropdown_style = {"display": "block"} if mode == "single" else {"display": "none"}
+
+    filtered = df.copy()
+    if selected_region and selected_region != "all":
+        filtered = filtered[filtered["region"] == selected_region]
+    if selected_democracy and selected_democracy != "all":
+        filtered = filtered[filtered["democracy_flag"] == selected_democracy]
 
     if mode == "single":
         # ---------------------------
         # SINGLE IDEOLOGY VIEW
         # ---------------------------
-        filtered = df[df["hog_ideology"] == selected_ideology]
-        yearly_counts = filtered.groupby("year").size().reset_index(name="count")
+        ideology_filtered = filtered[filtered["hog_ideology"] == selected_ideology]
+        yearly_counts = ideology_filtered.groupby("year").size().reset_index(name="count")
 
         fig = px.bar(
             yearly_counts,
@@ -219,15 +318,15 @@ def update_chart(mode, selected_ideology):
             xaxis_title=None,
             yaxis_title=None
         )
-        fig.update_xaxes(showticklabels=False)
-        fig.update_yaxes(showticklabels=False)
+        fig.update_xaxes(showticklabels=False, fixedrange=True)
+        fig.update_yaxes(showticklabels=False, fixedrange=True)
         return fig, dropdown_style
 
     else:
         # ---------------------------
         # ALL IDEOLOGIES VIEW
         # ---------------------------
-        grouped = df[df["hog_ideology"].isin(valid_ideologies)]
+        grouped = filtered[filtered["hog_ideology"].isin(valid_ideologies)]
         grouped = grouped.groupby(["year", "hog_ideology"]).size().reset_index(name="count")
 
         fig = px.bar(
@@ -247,8 +346,8 @@ def update_chart(mode, selected_ideology):
             yaxis_title=None,
             legend_title_text="Ideology"
         )
-        fig.update_xaxes(showticklabels=False)
-        fig.update_yaxes(showticklabels=False)
+        fig.update_xaxes(showticklabels=False, fixedrange=True)
+        fig.update_yaxes(showticklabels=False, fixedrange=True)
         return fig, dropdown_style
 
 
