@@ -155,6 +155,7 @@ app.layout = html.Div([
             min=min_year if min_year is not None else 0,
             max=max_year if max_year is not None else 0,
             value=max_year if max_year is not None else 0,
+            included=False,
             marks=year_marks if year_marks else {},
             step=1,
             tooltip={"always_visible": False, "placement": "bottom"}
