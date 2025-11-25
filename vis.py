@@ -60,10 +60,10 @@ def _resolve_regions(selection):
 
 
 def _resolve_ideologies(selection):
-    if not selection or "all" in selection:
-        return valid_ideologies
+    if not selection:
+        return []
     resolved = [ide for ide in selection if ide in valid_ideologies]
-    return resolved or valid_ideologies
+    return resolved
 
 
 # --------------------------------------
@@ -84,7 +84,11 @@ def make_world_map(
         filtered = filtered.iloc[0:0]
     else:
         filtered = filtered[filtered["democracy_flag"].isin(democracy_filters)]
-    if ideology_filters:
+    if ideology_filters is None:
+        pass
+    elif len(ideology_filters) == 0:
+        filtered = filtered.iloc[0:0]
+    else:
         filtered = filtered[filtered["hog_ideology"].isin(ideology_filters)]
     if selected_year is not None:
         filtered = filtered[filtered["year"] == selected_year]
@@ -131,7 +135,9 @@ def make_world_map(
 
 def make_trend_chart(filtered_df, selected_ideologies):
     ideologies = _resolve_ideologies(selected_ideologies)
-    if len(ideologies) == 1:
+    if not ideologies:
+        fig = go.Figure()
+    elif len(ideologies) == 1:
         ideology = ideologies[0]
         ideology_df = filtered_df[filtered_df["hog_ideology"] == ideology]
         yearly_counts = ideology_df.groupby("year").size().reset_index(name="count")
@@ -246,11 +252,8 @@ def build_sidebar():
                 html.Label("Ideology", style={"fontSize": 16}),
                 dcc.Checklist(
                     id="ideology_selector",
-                    options=[
-                        {"label": "All", "value": "all"},
-                        *[{"label": ide.capitalize(), "value": ide} for ide in valid_ideologies],
-                    ],
-                    value=["all"],
+                    options=[{"label": ide.capitalize(), "value": ide} for ide in valid_ideologies],
+                    value=valid_ideologies.copy(),
                     labelStyle=CHOICE_LABEL_STYLE,
                     inputStyle={"marginRight": "4px"},
                 ),
@@ -297,7 +300,7 @@ app.index_string = """
 
 default_world_map_fig = make_world_map(selected_year=max_year, ideology_filters=valid_ideologies)
 
-default_trend_fig = make_trend_chart(df.copy(), ["all"])
+default_trend_fig = make_trend_chart(df.copy(), valid_ideologies)
 
 app.layout = html.Div(
     style={
