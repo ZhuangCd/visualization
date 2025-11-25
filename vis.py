@@ -166,6 +166,7 @@ def make_trend_chart(filtered_df, selected_ideologies):
         xaxis_title=None,
         yaxis_title=None,
         legend_title_text="Ideology" if len(ideologies) > 1 else None,
+        showlegend=False,
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
         font=dict(family=FONT_FAMILY),
