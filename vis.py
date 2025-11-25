@@ -59,10 +59,22 @@ def _resolve_regions(selection):
     return selection
 
 
+def _resolve_ideologies(selection):
+    if not selection or "all" in selection:
+        return valid_ideologies
+    resolved = [ide for ide in selection if ide in valid_ideologies]
+    return resolved or valid_ideologies
+
+
 # --------------------------------------
 # Figure factories
 # --------------------------------------
-def make_world_map(selected_regions=None, selected_year=None, democracy_filters=None):
+def make_world_map(
+    selected_regions=None,
+    selected_year=None,
+    democracy_filters=None,
+    ideology_filters=None,
+):
     filtered = map_df
     if selected_regions:
         filtered = filtered[filtered["region"].isin(selected_regions)]
@@ -72,6 +84,8 @@ def make_world_map(selected_regions=None, selected_year=None, democracy_filters=
         filtered = filtered.iloc[0:0]
     else:
         filtered = filtered[filtered["democracy_flag"].isin(democracy_filters)]
+    if ideology_filters:
+        filtered = filtered[filtered["hog_ideology"].isin(ideology_filters)]
     if selected_year is not None:
         filtered = filtered[filtered["year"] == selected_year]
 
@@ -115,19 +129,21 @@ def make_world_map(selected_regions=None, selected_year=None, democracy_filters=
     return fig
 
 
-def make_trend_chart(filtered_df, mode, selected_ideology):
-    if mode == "single":
-        ideology_df = filtered_df[filtered_df["hog_ideology"] == selected_ideology]
+def make_trend_chart(filtered_df, selected_ideologies):
+    ideologies = _resolve_ideologies(selected_ideologies)
+    if len(ideologies) == 1:
+        ideology = ideologies[0]
+        ideology_df = filtered_df[filtered_df["hog_ideology"] == ideology]
         yearly_counts = ideology_df.groupby("year").size().reset_index(name="count")
         fig = px.bar(
             yearly_counts,
             x="year",
             y="count",
-            color_discrete_sequence=[color_map[selected_ideology]],
+            color_discrete_sequence=[color_map[ideology]],
             opacity=0.75,
         )
     else:
-        grouped = filtered_df[filtered_df["hog_ideology"].isin(valid_ideologies)]
+        grouped = filtered_df[filtered_df["hog_ideology"].isin(ideologies)]
         grouped = grouped.groupby(["year", "hog_ideology"]).size().reset_index(name="count")
         fig = px.bar(
             grouped,
@@ -143,7 +159,7 @@ def make_trend_chart(filtered_df, mode, selected_ideology):
         margin=dict(l=30, r=20, t=5, b=5),
         xaxis_title=None,
         yaxis_title=None,
-        legend_title_text="Ideology" if mode != "single" else None,
+        legend_title_text="Ideology" if len(ideologies) > 1 else None,
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
         font=dict(family=FONT_FAMILY),
@@ -227,29 +243,18 @@ def build_sidebar():
                 ),
             ]),
             html.Div([
-                html.Label("Display Mode", style={"fontSize": 16}),
-                dcc.RadioItems(
-                    id="mode",
+                html.Label("Ideology", style={"fontSize": 16}),
+                dcc.Checklist(
+                    id="ideology_selector",
                     options=[
-                        {"label": "Single Ideology", "value": "single"},
-                        {"label": "All Ideologies", "value": "all"},
+                        {"label": "All", "value": "all"},
+                        *[{"label": ide.capitalize(), "value": ide} for ide in valid_ideologies],
                     ],
-                    value="single",
+                    value=["all"],
                     labelStyle=CHOICE_LABEL_STYLE,
+                    inputStyle={"marginRight": "4px"},
                 ),
             ]),
-            html.Div(
-                id="single_selector_div",
-                children=[
-                    html.Label("Select Ideology", style={"fontSize": 16}),
-                    dcc.RadioItems(
-                        id="ideology_selector",
-                        options=[{"label": ide.capitalize(), "value": ide} for ide in valid_ideologies],
-                        value="leftist",
-                        labelStyle=CHOICE_LABEL_STYLE,
-                    ),
-                ],
-            ),
             html.Div([
                 html.Label("Map Legend", style={"fontSize": 16}),
                 html.Div(build_color_legend_items()),
@@ -290,9 +295,9 @@ app.index_string = """
 </html>
 """
 
-default_world_map_fig = make_world_map(selected_year=max_year)
+default_world_map_fig = make_world_map(selected_year=max_year, ideology_filters=valid_ideologies)
 
-default_trend_fig = make_trend_chart(df.copy(), "single", "leftist")
+default_trend_fig = make_trend_chart(df.copy(), ["all"])
 
 app.layout = html.Div(
     style={
@@ -380,25 +385,28 @@ app.layout = html.Div(
     Input("region_selector", "value"),
     Input("democracy_selector", "value"),
     Input("year_slider", "value"),
+    Input("ideology_selector", "value"),
 )
-def update_world_map(selected_regions, selected_democracy, selected_year):
+def update_world_map(selected_regions, selected_democracy, selected_year, selected_ideologies):
     regions = _resolve_regions(selected_regions)
     year_value = int(selected_year) if selected_year is not None else max_year
     democracy_filters = selected_democracy if selected_democracy is not None else None
-    return make_world_map(regions, year_value, democracy_filters)
+    ideology_filters = _resolve_ideologies(selected_ideologies)
+    return make_world_map(
+        regions,
+        year_value,
+        democracy_filters,
+        ideology_filters,
+    )
 
 
 @app.callback(
     Output("trend_chart", "figure"),
-    Output("single_selector_div", "style"),
-    Input("mode", "value"),
-    Input("ideology_selector", "value"),
     Input("region_selector", "value"),
     Input("democracy_selector", "value"),
+    Input("ideology_selector", "value"),
 )
-def update_chart(mode, selected_ideology, selected_regions, selected_democracy):
-    dropdown_style = {"display": "block"} if mode == "single" else {"display": "none"}
-
+def update_chart(selected_regions, selected_democracy, selected_ideologies):
     filtered = df.copy()
     regions = _resolve_regions(selected_regions)
     if regions:
@@ -410,8 +418,8 @@ def update_chart(mode, selected_ideology, selected_regions, selected_democracy):
     else:
         filtered = filtered[filtered["democracy_flag"].isin(selected_democracy)]
 
-    fig = make_trend_chart(filtered, mode, selected_ideology)
-    return fig, dropdown_style
+    fig = make_trend_chart(filtered, selected_ideologies)
+    return fig
 
 
 if __name__ == "__main__":
