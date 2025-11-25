@@ -61,12 +61,12 @@ def _resolve_regions(selection):
 # --------------------------------------
 # Figure factories
 # --------------------------------------
-def make_world_map(selected_regions=None, selected_year=None, democracy_filter="all"):
+def make_world_map(selected_regions=None, selected_year=None, democracy_filters=None):
     filtered = map_df
     if selected_regions:
         filtered = filtered[filtered["region"].isin(selected_regions)]
-    if democracy_filter and democracy_filter != "all":
-        filtered = filtered[filtered["democracy_flag"] == democracy_filter]
+    if democracy_filters:
+        filtered = filtered[filtered["democracy_flag"].isin(democracy_filters)]
     if selected_year is not None:
         filtered = filtered[filtered["year"] == selected_year]
 
@@ -180,7 +180,6 @@ def build_sidebar():
         for region in region_values
     ]
     democracy_options = [
-        {"label": "All regimes", "value": "all"},
         {"label": "Democracies", "value": "yes"},
         {"label": "Non-democracies", "value": "no"},
     ]
@@ -214,11 +213,12 @@ def build_sidebar():
             ]),
             html.Div([
                 html.Label("Regime Type", style={"fontSize": 16}),
-                dcc.RadioItems(
+                dcc.Checklist(
                     id="democracy_selector",
                     options=democracy_options,
-                    value="all",
+                    value=[option["value"] for option in democracy_options],
                     labelStyle=CHOICE_LABEL_STYLE,
+                    inputStyle={"marginRight": "4px"},
                 ),
             ]),
             html.Div([
@@ -379,7 +379,8 @@ app.layout = html.Div(
 def update_world_map(selected_regions, selected_democracy, selected_year):
     regions = _resolve_regions(selected_regions)
     year_value = int(selected_year) if selected_year is not None else max_year
-    return make_world_map(regions, year_value, selected_democracy)
+    democracy_filters = selected_democracy if selected_democracy else None
+    return make_world_map(regions, year_value, democracy_filters)
 
 
 @app.callback(
@@ -397,8 +398,8 @@ def update_chart(mode, selected_ideology, selected_regions, selected_democracy):
     regions = _resolve_regions(selected_regions)
     if regions:
         filtered = filtered[filtered["region"].isin(regions)]
-    if selected_democracy and selected_democracy != "all":
-        filtered = filtered[filtered["democracy_flag"] == selected_democracy]
+    if selected_democracy:
+        filtered = filtered[filtered["democracy_flag"].isin(selected_democracy)]
 
     fig = make_trend_chart(filtered, mode, selected_ideology)
     return fig, dropdown_style
