@@ -1,7 +1,7 @@
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from dash import Dash, Input, Output, dcc, html
+from dash import Dash, Input, Output, dcc, html, ctx
 
 
 # --------------------------------------
@@ -26,6 +26,11 @@ color_map = {
     "leftist": "#1d76db",
     "centrist": "#b094b0",
     "rightist": "#db231d",
+}
+GREY_STAGE_COLORS = {
+    1: "#dcdcdc",
+    2: "#b7b6b6",
+    3: "#8c8b8b",
 }
 FONT_FAMILY = "Omega, Arial, sans-serif"
 CHOICE_LABEL_STYLE = {
@@ -53,6 +58,9 @@ year_marks = {
 }
 
 
+# --------------------------------------
+# Helpers
+# --------------------------------------
 def _resolve_regions(selection):
     if not selection or "all" in selection:
         return None
@@ -71,34 +79,58 @@ def _apply_multi_filter(frame, column, values):
     return frame[frame[column].isin(values)]
 
 
+def _compute_stage(has_region, regimes, ideologies, year_selected):
+    stage = 0
+    if not has_region:
+        return stage
+    stage = 1
+    if not regimes:
+        return stage
+    stage = 2
+    if not ideologies:
+        return stage
+    stage = 3
+    if not year_selected:
+        return stage
+    return 4
+
+
+def _prepare_stage_highlight(stage, regions, regimes, ideologies, has_region_selection):
+    if stage == 0 or not has_region_selection:
+        return pd.DataFrame()
+
+    subset = map_df
+    if regions:
+        subset = subset[subset["region"].isin(regions)]
+    if stage >= 2:
+        subset = _apply_multi_filter(subset, "democracy_flag", regimes)
+    if stage >= 3:
+        subset = _apply_multi_filter(subset, "hog_ideology", ideologies)
+    return subset.drop_duplicates(subset=["country_name"])
+
+
 # --------------------------------------
 # Figure factories
 # --------------------------------------
 def make_world_map(
+    stage,
     selected_regions=None,
     selected_year=None,
     democracy_filters=None,
     ideology_filters=None,
+    has_region_selection=False,
 ):
     filtered = map_df
     if selected_regions:
         filtered = filtered[filtered["region"].isin(selected_regions)]
-    filtered = _apply_multi_filter(filtered, "democracy_flag", democracy_filters)
-    filtered = _apply_multi_filter(filtered, "hog_ideology", ideology_filters)
-    if selected_year is not None:
-        filtered = filtered[filtered["year"] == selected_year]
 
-    if filtered.empty:
-        fig = go.Figure()
-        fig.add_trace(
-            go.Choropleth(
-                locations=[],
-                z=[],
-                showscale=False,
-                hoverinfo="skip",
-            )
-        )
-    else:
+    if stage == 4:
+        filtered = _apply_multi_filter(filtered, "democracy_flag", democracy_filters)
+        filtered = _apply_multi_filter(filtered, "hog_ideology", ideology_filters)
+        if selected_year is not None:
+            filtered = filtered[filtered["year"] == selected_year]
+
+    if stage == 4 and selected_year is not None and not filtered.empty:
         fig = px.choropleth(
             filtered,
             locations="country_name",
@@ -108,6 +140,31 @@ def make_world_map(
             hover_data={"year": True, "region": True},
             color_discrete_map=color_map,
         )
+    else:
+        highlight_df = _prepare_stage_highlight(
+            stage,
+            selected_regions,
+            democracy_filters,
+            ideology_filters,
+            has_region_selection,
+        )
+        if highlight_df.empty:
+            fig = go.Figure()
+            fig.add_trace(
+                go.Choropleth(locations=[], z=[], showscale=False, hoverinfo="skip")
+            )
+        else:
+            stage_label = f"stage_{stage}"
+            highlight_df = highlight_df.assign(stage_label=stage_label)
+            fig = px.choropleth(
+                highlight_df,
+                locations="country_name",
+                locationmode="country names",
+                color="stage_label",
+                hover_name="country_name",
+                hover_data={"region": True},
+                color_discrete_map={stage_label: GREY_STAGE_COLORS.get(stage, "#dddddd")},
+            )
 
     fig.update_geos(
         showland=True,
@@ -233,7 +290,7 @@ def build_sidebar():
                 dcc.Checklist(
                     id="region_selector",
                     options=region_options,
-                    value=["all"],
+                    value=[],
                     labelStyle=CHOICE_LABEL_STYLE,
                     inputStyle={"marginRight": "4px"},
                 ),
@@ -243,7 +300,7 @@ def build_sidebar():
                 dcc.Checklist(
                     id="democracy_selector",
                     options=democracy_options,
-                    value=[option["value"] for option in democracy_options],
+                    value=[],
                     labelStyle=CHOICE_LABEL_STYLE,
                     inputStyle={"marginRight": "4px"},
                 ),
@@ -253,7 +310,7 @@ def build_sidebar():
                 dcc.Checklist(
                     id="ideology_selector",
                     options=build_ideology_options(),
-                    value=valid_ideologies.copy(),
+                    value=[],
                     labelStyle={**CHOICE_LABEL_STYLE, "gap": "12px"},
                     inputStyle={"marginRight": "4px"},
                     className="ideology-checklist",
@@ -295,8 +352,7 @@ app.index_string = """
 </html>
 """
 
-default_world_map_fig = make_world_map(selected_year=max_year, ideology_filters=valid_ideologies)
-
+default_world_map_fig = make_world_map(stage=0)
 default_trend_fig = make_trend_chart(df, valid_ideologies)
 
 app.layout = html.Div(
@@ -310,6 +366,7 @@ app.layout = html.Div(
         "fontFamily": FONT_FAMILY,
     },
     children=[
+        dcc.Store(id="year_confirmed", data=False),
         build_sidebar(),
         html.Div(
             id="main_panel",
@@ -380,22 +437,34 @@ app.layout = html.Div(
 # --------------------------------------
 # Callbacks
 # --------------------------------------
+@app.callback(Output("year_confirmed", "data"), Input("year_slider", "value"))
+def flag_year_confirmation(selected_year):
+    if ctx.triggered_id is None:
+        return False
+    return True
+
+
 @app.callback(
     Output("world_map", "figure"),
     Input("region_selector", "value"),
     Input("democracy_selector", "value"),
     Input("year_slider", "value"),
     Input("ideology_selector", "value"),
+    Input("year_confirmed", "data"),
 )
-def update_world_map(selected_regions, selected_democracy, selected_year, selected_ideologies):
+def update_world_map(selected_regions, selected_democracy, selected_year, selected_ideologies, year_confirmed):
     regions = _resolve_regions(selected_regions)
-    year_value = int(selected_year) if selected_year is not None else max_year
+    has_region_selection = bool(selected_regions)
     ideology_filters = _resolve_ideologies(selected_ideologies)
+    stage = _compute_stage(has_region_selection, selected_democracy, ideology_filters, year_confirmed)
+    year_value = int(selected_year) if (stage == 4 and selected_year is not None) else None
     return make_world_map(
+        stage,
         regions,
         year_value,
         selected_democracy,
         ideology_filters,
+        has_region_selection,
     )
 
 
