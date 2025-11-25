@@ -229,7 +229,7 @@ def build_sidebar():
         children=[
             html.H2("Global Ideologies", style={"margin": "0"}),
             html.Div([
-                html.Label("Region", style={"fontSize": 16}),
+                html.Label("Region", style={"fontSize": 16, "fontWeight": "bold"}),
                 dcc.Checklist(
                     id="region_selector",
                     options=region_options,
@@ -239,7 +239,7 @@ def build_sidebar():
                 ),
             ]),
             html.Div([
-                html.Label("Regime Type", style={"fontSize": 16}),
+                html.Label("Regime Type", style={"fontSize": 16, "fontWeight": "bold"}),
                 dcc.Checklist(
                     id="democracy_selector",
                     options=democracy_options,
@@ -249,7 +249,7 @@ def build_sidebar():
                 ),
             ]),
             html.Div([
-                html.Label("Ideology", style={"fontSize": 16}),
+                html.Label("Ideology", style={"fontSize": 16, "fontWeight": "bold"}),
                 dcc.Checklist(
                     id="ideology_selector",
                     options=build_ideology_options(),
