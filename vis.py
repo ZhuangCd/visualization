@@ -1,5 +1,6 @@
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from dash import Dash, Input, Output, dcc, html
 
 
@@ -65,20 +66,24 @@ def make_world_map(selected_regions=None, selected_year=None, democracy_filters=
     filtered = map_df
     if selected_regions:
         filtered = filtered[filtered["region"].isin(selected_regions)]
-    if democracy_filters:
+    if democracy_filters is None:
+        pass
+    elif len(democracy_filters) == 0:
+        filtered = filtered.iloc[0:0]
+    else:
         filtered = filtered[filtered["democracy_flag"].isin(democracy_filters)]
     if selected_year is not None:
         filtered = filtered[filtered["year"] == selected_year]
 
     if filtered.empty:
-        placeholder = map_df.groupby("country_name").size().reset_index(name="count")
-        fig = px.scatter_geo(
-            placeholder,
-            locations="country_name",
-            locationmode="country names",
-            size="count",
-            hover_name="country_name",
-            size_max=20,
+        fig = go.Figure()
+        fig.add_trace(
+            go.Choropleth(
+                locations=[],
+                z=[],
+                showscale=False,
+                hoverinfo="skip",
+            )
         )
     else:
         fig = px.choropleth(
@@ -379,7 +384,7 @@ app.layout = html.Div(
 def update_world_map(selected_regions, selected_democracy, selected_year):
     regions = _resolve_regions(selected_regions)
     year_value = int(selected_year) if selected_year is not None else max_year
-    democracy_filters = selected_democracy if selected_democracy else None
+    democracy_filters = selected_democracy if selected_democracy is not None else None
     return make_world_map(regions, year_value, democracy_filters)
 
 
@@ -398,7 +403,11 @@ def update_chart(mode, selected_ideology, selected_regions, selected_democracy):
     regions = _resolve_regions(selected_regions)
     if regions:
         filtered = filtered[filtered["region"].isin(regions)]
-    if selected_democracy:
+    if selected_democracy is None:
+        pass
+    elif len(selected_democracy) == 0:
+        filtered = filtered.iloc[0:0]
+    else:
         filtered = filtered[filtered["democracy_flag"].isin(selected_democracy)]
 
     fig = make_trend_chart(filtered, mode, selected_ideology)
