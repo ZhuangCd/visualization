@@ -170,6 +170,8 @@ def make_trend_chart(filtered_df, selected_ideologies):
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
         font=dict(family=FONT_FAMILY),
+        bargap=0,
+        bargroupgap=0,
     )
     fig.update_xaxes(showticklabels=False, fixedrange=True, showgrid=False)
     fig.update_yaxes(showticklabels=False, fixedrange=True, showgrid=False, zeroline=False)
