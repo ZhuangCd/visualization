@@ -60,10 +60,15 @@ def _resolve_regions(selection):
 
 
 def _resolve_ideologies(selection):
-    if not selection:
-        return []
-    resolved = [ide for ide in selection if ide in valid_ideologies]
-    return resolved
+    return [ide for ide in selection or [] if ide in valid_ideologies]
+
+
+def _apply_multi_filter(frame, column, values):
+    if values is None:
+        return frame
+    if not values:
+        return frame.iloc[0:0]
+    return frame[frame[column].isin(values)]
 
 
 # --------------------------------------
@@ -78,18 +83,8 @@ def make_world_map(
     filtered = map_df
     if selected_regions:
         filtered = filtered[filtered["region"].isin(selected_regions)]
-    if democracy_filters is None:
-        pass
-    elif len(democracy_filters) == 0:
-        filtered = filtered.iloc[0:0]
-    else:
-        filtered = filtered[filtered["democracy_flag"].isin(democracy_filters)]
-    if ideology_filters is None:
-        pass
-    elif len(ideology_filters) == 0:
-        filtered = filtered.iloc[0:0]
-    else:
-        filtered = filtered[filtered["hog_ideology"].isin(ideology_filters)]
+    filtered = _apply_multi_filter(filtered, "democracy_flag", democracy_filters)
+    filtered = _apply_multi_filter(filtered, "hog_ideology", ideology_filters)
     if selected_year is not None:
         filtered = filtered[filtered["year"] == selected_year]
 
@@ -182,37 +177,34 @@ def make_trend_chart(filtered_df, selected_ideologies):
 # Layout helpers
 # --------------------------------------
 def build_ideology_options():
-    options = []
-    for ide in valid_ideologies:
-        options.append(
-            {
-                "label": html.Span(
-                    [
-                        html.Span(
-                            style={
-                                "display": "inline-block",
-                                "width": "12px",
-                                "height": "12px",
-                                "borderRadius": "2px",
-                                "backgroundColor": color_map[ide],
-                                "marginRight": "8px",
-                            }
-                        ),
-                        html.Span(ide.capitalize()),
-                    ],
-                    style={"display": "flex", "alignItems": "center"},
-                ),
-                "value": ide,
-            }
-        )
-    return options
+    return [
+        {
+            "label": html.Span(
+                [
+                    html.Span(
+                        style={
+                            "display": "inline-block",
+                            "width": "12px",
+                            "height": "12px",
+                            "borderRadius": "2px",
+                            "backgroundColor": color_map[ide],
+                            "marginRight": "8px",
+                        }
+                    ),
+                    html.Span(ide.capitalize()),
+                ],
+                style={"display": "flex", "alignItems": "center"},
+            ),
+            "value": ide,
+        }
+        for ide in valid_ideologies
+    ]
 
 
 def build_sidebar():
     region_values = sorted(map_df["region"].dropna().unique())
     region_options = [{"label": "All", "value": "all"}] + [
-        {"label": region.title(), "value": region}
-        for region in region_values
+        {"label": region.title(), "value": region} for region in region_values
     ]
     democracy_options = [
         {"label": "Democracies", "value": "yes"},
@@ -305,7 +297,7 @@ app.index_string = """
 
 default_world_map_fig = make_world_map(selected_year=max_year, ideology_filters=valid_ideologies)
 
-default_trend_fig = make_trend_chart(df.copy(), valid_ideologies)
+default_trend_fig = make_trend_chart(df, valid_ideologies)
 
 app.layout = html.Div(
     style={
@@ -398,12 +390,11 @@ app.layout = html.Div(
 def update_world_map(selected_regions, selected_democracy, selected_year, selected_ideologies):
     regions = _resolve_regions(selected_regions)
     year_value = int(selected_year) if selected_year is not None else max_year
-    democracy_filters = selected_democracy if selected_democracy is not None else None
     ideology_filters = _resolve_ideologies(selected_ideologies)
     return make_world_map(
         regions,
         year_value,
-        democracy_filters,
+        selected_democracy,
         ideology_filters,
     )
 
@@ -415,16 +406,11 @@ def update_world_map(selected_regions, selected_democracy, selected_year, select
     Input("ideology_selector", "value"),
 )
 def update_chart(selected_regions, selected_democracy, selected_ideologies):
-    filtered = df.copy()
+    filtered = df
     regions = _resolve_regions(selected_regions)
     if regions:
         filtered = filtered[filtered["region"].isin(regions)]
-    if selected_democracy is None:
-        pass
-    elif len(selected_democracy) == 0:
-        filtered = filtered.iloc[0:0]
-    else:
-        filtered = filtered[filtered["democracy_flag"].isin(selected_democracy)]
+    filtered = _apply_multi_filter(filtered, "democracy_flag", selected_democracy)
 
     fig = make_trend_chart(filtered, selected_ideologies)
     return fig
