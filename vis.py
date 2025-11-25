@@ -178,26 +178,31 @@ def make_trend_chart(filtered_df, selected_ideologies):
 # --------------------------------------
 # Layout helpers
 # --------------------------------------
-def build_color_legend_items():
-    return [
-        html.Div(
-            children=[
-                html.Span(
-                    style={
-                        "display": "inline-block",
-                        "width": "14px",
-                        "height": "14px",
-                        "borderRadius": "50%",
-                        "backgroundColor": color_map[label],
-                        "marginRight": "8px",
-                    }
+def build_ideology_options():
+    options = []
+    for ide in valid_ideologies:
+        options.append(
+            {
+                "label": html.Span(
+                    [
+                        html.Span(
+                            style={
+                                "display": "inline-block",
+                                "width": "12px",
+                                "height": "12px",
+                                "borderRadius": "2px",
+                                "backgroundColor": color_map[ide],
+                                "marginRight": "8px",
+                            }
+                        ),
+                        html.Span(ide.capitalize()),
+                    ],
+                    style={"display": "flex", "alignItems": "center"},
                 ),
-                html.Span(label.capitalize()),
-            ],
-            style={"display": "flex", "alignItems": "center", "marginBottom": "6px"},
+                "value": ide,
+            }
         )
-        for label in valid_ideologies
-    ]
+    return options
 
 
 def build_sidebar():
@@ -252,15 +257,12 @@ def build_sidebar():
                 html.Label("Ideology", style={"fontSize": 16}),
                 dcc.Checklist(
                     id="ideology_selector",
-                    options=[{"label": ide.capitalize(), "value": ide} for ide in valid_ideologies],
+                    options=build_ideology_options(),
                     value=valid_ideologies.copy(),
-                    labelStyle=CHOICE_LABEL_STYLE,
+                    labelStyle={**CHOICE_LABEL_STYLE, "gap": "12px"},
                     inputStyle={"marginRight": "4px"},
+                    className="ideology-checklist",
                 ),
-            ]),
-            html.Div([
-                html.Label("Map Legend", style={"fontSize": 16}),
-                html.Div(build_color_legend_items()),
             ]),
         ],
     )
