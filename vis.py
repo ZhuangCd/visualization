@@ -65,7 +65,6 @@ INFO_SECTIONS = {
     "Research questions": "How do geography, regime type, and ideology intersect across modern leadership history?",
     "Sources": "https://www.ippapublicpolicy.org/file/paper/60c247759f1df.pdf",
     "Made by": "William Kosse, Márton Berettyán, Nóra Balogh",
-    "Supervised by": "Global Affairs Faculty"
 }
 DATASET_SOURCE_URL = "https://github.com/bastianherre/global-leader-ideologies"
 
@@ -253,7 +252,6 @@ def _build_info_card():
             ),
         ),
         ("Made by", INFO_SECTIONS["Made by"]),
-        ("Supervised by", INFO_SECTIONS["Supervised by"]),
     ]
 
     return html.Div(
