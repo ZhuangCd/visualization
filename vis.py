@@ -54,6 +54,12 @@ CHOICE_LABEL_STYLE = {
     "padding": "4px 0",
     "lineHeight": "1.3",
 }
+HOVER_TEMPLATE = "<b>%{location}</b><br>Click for political summary<extra></extra>"
+HOVER_LABEL_STYLE = {
+    "bgcolor": "#ffffff",
+    "bordercolor": "#d7d7d7",
+    "font": {"family": FONT_FAMILY, "color": "#111", "size": 12},
+}
 
 map_df = raw_df.reindex(
     columns=["country_name", "hog_ideology", "year", "region", "democracy", *SUMMARY_COLUMNS]
@@ -264,8 +270,6 @@ def make_world_map(
             locations="country_name",
             locationmode="country names",
             color="hog_ideology",
-            hover_name="country_name",
-            hover_data={"year": True, "region": True},
             color_discrete_map=color_map,
         )
     else:
@@ -289,8 +293,6 @@ def make_world_map(
                 locations="country_name",
                 locationmode="country names",
                 color="stage_label",
-                hover_name="country_name",
-                hover_data={"region": True},
                 color_discrete_map={stage_label: GREY_STAGE_COLORS.get(stage, "#dddddd")},
             )
 
@@ -310,6 +312,8 @@ def make_world_map(
         showlegend=False,
         font=dict(family=FONT_FAMILY),
     )
+    if fig.data:
+        fig.update_traces(hovertemplate=HOVER_TEMPLATE, hoverlabel=HOVER_LABEL_STYLE)
     return fig
 
 
@@ -504,7 +508,7 @@ app.index_string = """
 
             .summary-modal {
                 background: #ffffff;
-                border-radius: 12px;
+                border-radius: 0;
                 max-width: 420px;
                 width: 100%;
                 padding: 24px;
@@ -524,6 +528,7 @@ app.index_string = """
                 cursor: pointer;
                 padding: 4px 8px;
                 line-height: 1;
+                border-radius: 0;
             }
 
             .summary-title {
