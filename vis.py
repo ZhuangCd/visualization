@@ -60,6 +60,14 @@ HOVER_LABEL_STYLE = {
     "bordercolor": "#d7d7d7",
     "font": {"family": FONT_FAMILY, "color": "#111", "size": 12},
 }
+INFO_SECTIONS = {
+    "Project name": "Global Ideology Explorer",
+    "Research questions": "How do geography, regime type, and ideology intersect across modern leadership history?",
+    "Sources": "https://www.ippapublicpolicy.org/file/paper/60c247759f1df.pdf",
+    "Made by": "William Kosse, Márton Berettyán, Nóra Balogh",
+    "Supervised by": "Global Affairs Faculty"
+}
+DATASET_SOURCE_URL = "https://github.com/bastianherre/global-leader-ideologies"
 
 map_df = raw_df.reindex(
     columns=["country_name", "hog_ideology", "year", "region", "democracy", *SUMMARY_COLUMNS]
@@ -208,6 +216,66 @@ def _build_summary_card(country, year, row):
                     )
                     for label, value in fields
                 ]
+            ),
+        ],
+    )
+
+
+def _build_info_card():
+    instruction_steps = [
+        "Pick one or more regions to activate the workflow.",
+        "Choose a regime type to focus the dataset.",
+        "Select at least one ideology to reveal ideological splits.",
+        "Lock a specific year on the slider to unlock the full-color map view.",
+    ]
+
+    info_fields = [
+        ("Project name", INFO_SECTIONS["Project name"]),
+        ("Research questions", INFO_SECTIONS["Research questions"]),
+        (
+            "Sources",
+            html.Span(
+                [
+                    html.A(
+                        "Identifying Ideologues: A Global Dataset on Political Leaders, 1945-2019, Bastian Herre",
+                        href=INFO_SECTIONS["Sources"],
+                        target="_blank",
+                        className="summary-link",
+                    ),
+                    html.Span(" — "),
+                    html.A(
+                        "Dataset (GitHub)",
+                        href=DATASET_SOURCE_URL,
+                        target="_blank",
+                        className="summary-link",
+                    ),
+                ]
+            ),
+        ),
+        ("Made by", INFO_SECTIONS["Made by"]),
+        ("Supervised by", INFO_SECTIONS["Supervised by"]),
+    ]
+
+    return html.Div(
+        className="summary-card",
+        children=[
+            html.H3("Project Information", className="summary-title"),
+            html.Div(
+                [
+                    html.Div(
+                        className="summary-field",
+                        children=[
+                            html.Span(f"{label}:", className="summary-label"),
+                            html.Span(value, className="summary-value"),
+                        ],
+                    )
+                    for label, value in info_fields
+                ]
+            ),
+            html.H4("Website instructions", className="summary-subtitle"),
+            html.Ul(
+                [html.Li(step, className="summary-instruction") for step in instruction_steps],
+                className="summary-list",
             ),
         ],
     )
@@ -537,6 +605,23 @@ app.index_string = """
                 font-size: 20px;
             }
 
+            .summary-subtitle {
+                margin: 18px 0 8px 0;
+                font-size: 16px;
+                font-weight: 600;
+            }
+
+            .summary-list {
+                margin: 0;
+                padding-left: 20px;
+                color: #111;
+                font-size: 13px;
+            }
+
+            .summary-instruction {
+                margin-bottom: 6px;
+            }
+
             .summary-field {
                 display: flex;
                 justify-content: space-between;
@@ -556,9 +641,37 @@ app.index_string = """
                 flex: 1;
             }
 
+            .summary-link {
+                color: #0b62d6;
+                text-decoration: underline;
+            }
+
+            .summary-link:hover {
+                color: #063a7f;
+            }
+
             .summary-empty {
                 font-size: 14px;
                 color: #555;
+            }
+
+            .info-button {
+                position: absolute;
+                top: 12px;
+                right: 16px;
+                background: #ffffff;
+                border: 1px solid #c7c7c7;
+                padding: 6px 10px;
+                font-size: 13px;
+                cursor: pointer;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+                border-radius: 0;
+            }
+
+            .info-button:hover {
+                background: #f5f5f5;
             }
         </style>
     </head>
@@ -603,6 +716,21 @@ app.layout = html.Div(
                 ),
             ],
         ),
+        html.Div(
+            id="info_overlay",
+            className="summary-overlay hidden",
+            children=[
+                html.Div(id="info_backdrop", className="summary-backdrop", n_clicks=0),
+                html.Div(
+                    id="info_modal",
+                    className="summary-modal",
+                    children=[
+                        html.Button("×", id="info_close", className="summary-close", n_clicks=0),
+                        _build_info_card(),
+                    ],
+                ),
+            ],
+        ),
         build_sidebar(),
         html.Div(
             id="main_panel",
@@ -614,15 +742,26 @@ app.layout = html.Div(
                 "overflow": "hidden",
             },
             children=[
-                dcc.Graph(
-                    id="world_map",
-                    figure=default_world_map_fig,
-                    config=MAP_CONFIG,
+                html.Div(
+                    id="map_container",
                     style={
                         "flex": "1 1 85%",
                         "width": "100%",
                         "height": "100%",
+                        "position": "relative",
                     },
+                    children=[
+                        dcc.Graph(
+                            id="world_map",
+                            figure=default_world_map_fig,
+                            config=MAP_CONFIG,
+                            style={
+                                "width": "100%",
+                                "height": "100%",
+                            },
+                        ),
+                        html.Button("Info", id="info_button", className="info-button", n_clicks=0),
+                    ],
                 ),
                 html.Div(
                     id="histogram_container",
@@ -678,6 +817,22 @@ def flag_year_confirmation(selected_year):
     if ctx.triggered_id is None:
         return False
     return True
+
+
+@app.callback(
+    Output("info_overlay", "className"),
+    Input("info_button", "n_clicks"),
+    Input("info_close", "n_clicks"),
+    Input("info_backdrop", "n_clicks"),
+    prevent_initial_call=True,
+)
+def toggle_info_modal(info_click, close_click, backdrop_click):
+    trigger = ctx.triggered_id
+    if trigger in {"info_close", "info_backdrop"}:
+        return "summary-overlay hidden"
+    if trigger == "info_button":
+        return "summary-overlay visible"
+    raise PreventUpdate
 
 
 @app.callback(
