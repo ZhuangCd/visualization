@@ -1,9 +1,12 @@
+import os
+from numbers import Number
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from numbers import Number
 from dash import Dash, Input, Output, State, dcc, html, ctx
 from dash.exceptions import PreventUpdate
+from flask import send_from_directory
 
 
 # --------------------------------------
@@ -46,7 +49,7 @@ GREY_STAGE_COLORS = {
     2: "#b7b6b6",
     3: "#8c8b8b",
 }
-FONT_FAMILY = "Omega, Arial, sans-serif"
+FONT_FAMILY = "ABCMonumentGrotesk, Arial, sans-serif"
 CHOICE_LABEL_STYLE = {
     "display": "flex",
     "alignItems": "center",
@@ -67,6 +70,11 @@ INFO_SECTIONS = {
     "Made by": "William Kosse, Márton Berettyán, Nóra Balogh",
 }
 DATASET_SOURCE_URL = "https://github.com/bastianherre/global-leader-ideologies"
+FONT_DIR = os.path.join(
+    os.path.dirname(__file__),
+    "fonts",
+    "monument-grotesk-font-family-1764226824-0",
+)
 
 map_df = raw_df.reindex(
     columns=["country_name", "hog_ideology", "year", "region", "democracy", *SUMMARY_COLUMNS]
@@ -484,7 +492,7 @@ def build_sidebar():
         children=[
             html.H2("Global Ideologies", style={"margin": "0"}),
             html.Div([
-                html.Label("Region", style={"fontSize": 16, "fontWeight": "bold"}),
+                html.Label("Region", style={"fontSize": 16, "fontWeight": 600}),
                 dcc.Checklist(
                     id="region_selector",
                     options=region_options,
@@ -494,7 +502,7 @@ def build_sidebar():
                 ),
             ]),
             html.Div([
-                html.Label("Regime Type", style={"fontSize": 16, "fontWeight": "bold"}),
+                html.Label("Regime Type", style={"fontSize": 16, "fontWeight": 600}),
                 dcc.Checklist(
                     id="democracy_selector",
                     options=democracy_options,
@@ -504,7 +512,7 @@ def build_sidebar():
                 ),
             ]),
             html.Div([
-                html.Label("Ideology", style={"fontSize": 16, "fontWeight": "bold"}),
+                html.Label("Ideology", style={"fontSize": 16, "fontWeight": 600}),
                 dcc.Checklist(
                     id="ideology_selector",
                     options=build_ideology_options(),
@@ -530,6 +538,11 @@ MAP_CONFIG = {
 TREND_CONFIG = {"displayModeBar": False, "staticPlot": True, "responsive": True}
 
 app = Dash(__name__)
+
+
+@app.server.route("/fonts/<path:filename>")
+def serve_font(filename):
+    return send_from_directory(FONT_DIR, filename)
 app.index_string = """
 <!DOCTYPE html>
 <html lang=\"en\" style=\"height:100%; overflow:hidden;\">
@@ -539,6 +552,22 @@ app.index_string = """
         {%favicon%}
         {%css%}
         <style>
+            @font-face {
+                font-family: "ABCMonumentGrotesk";
+                src: url("/fonts/ABCMonumentGrotesk-Regular-Trial.otf") format("opentype");
+                font-weight: 400;
+                font-style: normal;
+                font-display: swap;
+            }
+
+            @font-face {
+                font-family: "ABCMonumentGrotesk";
+                src: url("/fonts/ABCMonumentGrotesk-Bold-Trial.otf") format("opentype");
+                font-weight: 600;
+                font-style: normal;
+                font-display: swap;
+            }
+
             .summary-overlay {
                 position: fixed;
                 top: 0;
@@ -581,7 +610,7 @@ app.index_string = """
                 box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
                 position: relative;
                 z-index: 1;
-                font-family: "Poppins", "Segoe UI", Arial, sans-serif;
+                font-family: "ABCMonumentGrotesk", Arial, sans-serif;
             }
 
             .summary-close {
