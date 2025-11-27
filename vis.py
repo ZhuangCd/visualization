@@ -1,7 +1,9 @@
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from dash import Dash, Input, Output, dcc, html, ctx
+from numbers import Number
+from dash import Dash, Input, Output, State, dcc, html, ctx
+from dash.exceptions import PreventUpdate
 
 
 # --------------------------------------
@@ -15,7 +17,19 @@ def normalize_democracy(series: pd.Series) -> pd.Series:
     return normalized.where(normalized.isin(["yes", "no"]), "no data")
 
 
-df = raw_df[["year", "hog_ideology", "region", "democracy"]].copy()
+SUMMARY_COLUMNS = [
+    "hog",
+    "hog_party",
+    "hog_party_eng",
+    "leader",
+    "leader_party",
+    "leader_party_eng",
+    "hog_left",
+    "hog_center",
+    "hog_right",
+]
+
+df = raw_df.reindex(columns=["year", "hog_ideology", "region", "democracy", *SUMMARY_COLUMNS]).copy()
 df["hog_ideology"] = df["hog_ideology"].str.lower()
 df["year"] = pd.to_numeric(df["year"], errors="coerce").astype("Int64")
 df["region"] = df["region"].fillna("Unknown")
@@ -41,7 +55,9 @@ CHOICE_LABEL_STYLE = {
     "lineHeight": "1.3",
 }
 
-map_df = raw_df[["country_name", "hog_ideology", "year", "region", "democracy"]].copy()
+map_df = raw_df.reindex(
+    columns=["country_name", "hog_ideology", "year", "region", "democracy", *SUMMARY_COLUMNS]
+).copy()
 map_df["hog_ideology"] = map_df["hog_ideology"].str.lower()
 map_df["year"] = pd.to_numeric(map_df["year"], errors="coerce").astype("Int64")
 map_df = map_df[map_df["hog_ideology"].isin(valid_ideologies)]
@@ -77,6 +93,118 @@ def _apply_multi_filter(frame, column, values):
     if not values:
         return frame.iloc[0:0]
     return frame[frame[column].isin(values)]
+
+
+def _is_one(value) -> bool:
+    if pd.isna(value):
+        return False
+    try:
+        return float(value) == 1.0
+    except (TypeError, ValueError):
+        return bool(value)
+
+
+def _safe_text(value, fallback="Unknown"):
+    if value is None:
+        return fallback
+    if isinstance(value, str):
+        return value.strip() or fallback
+    if isinstance(value, Number):
+        if pd.isna(value):
+            return fallback
+        if float(value).is_integer():
+            return str(int(value))
+        return str(value)
+    if pd.isna(value):
+        return fallback
+    return str(value)
+
+
+def _format_democracy(row):
+    value = row.get("democracy_flag")
+    if value in (None, "no data"):
+        value = row.get("democracy")
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return "Unknown"
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "yes", "democracy", "true"}:
+        return "Democracy"
+    if normalized in {"0", "no", "non-democracy", "false"}:
+        return "Non-democracy"
+    return "Unknown"
+
+
+def _political_leaning(row):
+    if _is_one(row.get("hog_left")):
+        return "Left"
+    if _is_one(row.get("hog_center")):
+        return "Center"
+    if _is_one(row.get("hog_right")):
+        return "Right"
+    ideology = row.get("hog_ideology")
+    if isinstance(ideology, str) and ideology:
+        return ideology.capitalize()
+    return "Unknown"
+
+
+def _pref_value(row, primary, fallback):
+    value = row.get(primary)
+    if value is None or (isinstance(value, str) and not value.strip()):
+        value = row.get(fallback)
+    return _safe_text(value)
+
+
+def _extract_summary_row(country, year):
+    if not country or year is None:
+        return None
+    country_lower = str(country).strip().lower()
+    matches = map_df[
+        map_df["country_name"].fillna("").str.lower().eq(country_lower)
+        & map_df["year"].eq(year)
+    ]
+    if matches.empty:
+        return None
+    return matches.iloc[0]
+
+
+def _build_summary_card(country, year, row):
+    if row is None:
+        message = f"No political summary available for {country or 'the selected country'} in {year or 'this year'}."
+        return html.Div(
+            className="summary-card",
+            children=[html.Div(message, className="summary-empty")],
+        )
+
+    fields = [
+        ("Country", _safe_text(country)),
+        ("Year", _safe_text(year)),
+        ("Democracy", _format_democracy(row)),
+        ("Political leaning", _political_leaning(row)),
+        ("Head of Government", _safe_text(row.get("hog"))),
+        ("HoG Party", _pref_value(row, "hog_party_eng", "hog_party")),
+        ("Leader", _safe_text(row.get("leader"))),
+        ("Leader Party", _pref_value(row, "leader_party_eng", "leader_party")),
+        ("Region", _safe_text(row.get("region"))),
+    ]
+
+    return html.Div(
+        className="summary-card",
+        children=[
+            html.H3("Political Snapshot", className="summary-title"),
+            html.Div(
+                [
+                    html.Div(
+                        className="summary-field",
+                        children=[
+                            html.Span(f"{label}:", className="summary-label"),
+                            html.Span(value, className="summary-value"),
+                        ],
+                    )
+                    for label, value in fields
+                ]
+            ),
+        ],
+    )
 
 
 def _compute_stage(has_region, regimes, ideologies, year_selected):
@@ -340,6 +468,94 @@ app.index_string = """
         <title>{%title%}</title>
         {%favicon%}
         {%css%}
+        <style>
+            .summary-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: transparent;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+                z-index: 1000;
+                gap: 0;
+            }
+
+            .summary-overlay.hidden {
+                display: none;
+            }
+
+            .summary-overlay.visible {
+                display: flex;
+            }
+
+            .summary-backdrop {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.35);
+                cursor: pointer;
+            }
+
+            .summary-modal {
+                background: #ffffff;
+                border-radius: 12px;
+                max-width: 420px;
+                width: 100%;
+                padding: 24px;
+                box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
+                position: relative;
+                z-index: 1;
+                font-family: "Poppins", "Segoe UI", Arial, sans-serif;
+            }
+
+            .summary-close {
+                position: absolute;
+                top: 12px;
+                right: 12px;
+                border: none;
+                background: transparent;
+                font-size: 20px;
+                cursor: pointer;
+                padding: 4px 8px;
+                line-height: 1;
+            }
+
+            .summary-title {
+                margin-top: 0;
+                margin-bottom: 12px;
+                font-size: 20px;
+            }
+
+            .summary-field {
+                display: flex;
+                justify-content: space-between;
+                font-size: 14px;
+                margin-bottom: 6px;
+                gap: 12px;
+            }
+
+            .summary-label {
+                font-weight: 600;
+                color: #333;
+            }
+
+            .summary-value {
+                color: #111;
+                text-align: right;
+                flex: 1;
+            }
+
+            .summary-empty {
+                font-size: 14px;
+                color: #555;
+            }
+        </style>
     </head>
     <body style=\"margin:0; height:100%; overflow:hidden;\">
         {%app_entry%}
@@ -367,6 +583,21 @@ app.layout = html.Div(
     },
     children=[
         dcc.Store(id="year_confirmed", data=False),
+        html.Div(
+            id="summary_overlay",
+            className="summary-overlay hidden",
+            children=[
+                html.Div(id="summary_backdrop", className="summary-backdrop", n_clicks=0),
+                html.Div(
+                    id="summary_modal",
+                    className="summary-modal",
+                    children=[
+                        html.Button("×", id="summary_close", className="summary-close", n_clicks=0),
+                        html.Div(id="summary_modal_content", className="summary-modal-content"),
+                    ],
+                ),
+            ],
+        ),
         build_sidebar(),
         html.Div(
             id="main_panel",
@@ -442,6 +673,32 @@ def flag_year_confirmation(selected_year):
     if ctx.triggered_id is None:
         return False
     return True
+
+
+@app.callback(
+    Output("summary_modal_content", "children"),
+    Output("summary_overlay", "className"),
+    Input("world_map", "clickData"),
+    Input("summary_close", "n_clicks"),
+    Input("summary_backdrop", "n_clicks"),
+    State("year_slider", "value"),
+    prevent_initial_call=True,
+)
+def toggle_summary_modal(click_data, close_clicks, backdrop_clicks, selected_year):
+    trigger = ctx.triggered_id
+
+    if trigger in {"summary_close", "summary_backdrop"}:
+        return [], "summary-overlay hidden"
+
+    if trigger == "world_map" and click_data:
+        point = (click_data.get("points") or [{}])[0]
+        country = point.get("location") or point.get("hovertext")
+        year_value = int(selected_year) if selected_year is not None else None
+        row = _extract_summary_row(country, year_value)
+        content = _build_summary_card(country, year_value, row)
+        return content, "summary-overlay visible"
+
+    raise PreventUpdate
 
 
 @app.callback(
