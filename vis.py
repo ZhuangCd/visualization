@@ -1,10 +1,10 @@
-import os
 from numbers import Number
+from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from dash import Dash, Input, Output, State, dcc, html, ctx
+from dash import Dash, Input, Output, State, ctx, dcc, html
 from dash.exceptions import PreventUpdate
 from flask import send_from_directory
 
@@ -12,7 +12,11 @@ from flask import send_from_directory
 # --------------------------------------
 # Data prep
 # --------------------------------------
-raw_df = pd.read_csv("global_leader_ideologies.csv")
+BASE_DIR = Path(__file__).resolve().parent
+DATA_FILE = BASE_DIR / "global_leader_ideologies.csv"
+FONT_DIR = (BASE_DIR / "fonts" / "monument-grotesk-font-family-1764226824-0").resolve()
+
+raw_df = pd.read_csv(DATA_FILE)
 
 
 def normalize_democracy(series: pd.Series) -> pd.Series:
@@ -57,6 +61,7 @@ CHOICE_LABEL_STYLE = {
     "padding": "4px 0",
     "lineHeight": "1.3",
 }
+SECTION_LABEL_STYLE = {"fontSize": 16, "fontWeight": 600}
 HOVER_TEMPLATE = "<b>%{location}</b><br>Click for political summary<extra></extra>"
 HOVER_LABEL_STYLE = {
     "bgcolor": "#ffffff",
@@ -70,11 +75,6 @@ INFO_SECTIONS = {
     "Made by": "William Kosse, Márton Berettyán, Nóra Balogh",
 }
 DATASET_SOURCE_URL = "https://github.com/bastianherre/global-leader-ideologies"
-FONT_DIR = os.path.join(
-    os.path.dirname(__file__),
-    "fonts",
-    "monument-grotesk-font-family-1764226824-0",
-)
 
 map_df = raw_df.reindex(
     columns=["country_name", "hog_ideology", "year", "region", "democracy", *SUMMARY_COLUMNS]
@@ -86,13 +86,22 @@ map_df["democracy_flag"] = normalize_democracy(map_df["democracy"])
 map_df = map_df.drop_duplicates(subset=["country_name", "year"], keep="last")
 
 available_years = sorted(map_df["year"].dropna().unique())
-min_year = int(min(available_years)) if available_years else None
-max_year = int(max(available_years)) if available_years else None
-year_marks = {
-    int(y): str(int(y))
-    for y in available_years
-    if y == min_year or y == max_year or int(y) % 10 == 0
-}
+min_year = int(available_years[0]) if available_years else None
+max_year = int(available_years[-1]) if available_years else None
+
+
+def _year_marks(years):
+    if not years:
+        return {}
+    first, last = years[0], years[-1]
+    return {
+        int(year): str(int(year))
+        for year in years
+        if year in (first, last) or int(year) % 10 == 0
+    }
+
+
+year_marks = _year_marks(available_years)
 
 
 # --------------------------------------
@@ -289,17 +298,10 @@ def _build_info_card():
 
 def _compute_stage(has_region, regimes, ideologies, year_selected):
     stage = 0
-    if not has_region:
-        return stage
-    stage = 1
-    if not regimes:
-        return stage
-    stage = 2
-    if not ideologies:
-        return stage
-    stage = 3
-    if not year_selected:
-        return stage
+    for idx, ready in enumerate([has_region, regimes, ideologies, year_selected], start=1):
+        if not ready:
+            return stage
+        stage = idx
     return 4
 
 
@@ -492,7 +494,7 @@ def build_sidebar():
         children=[
             html.H2("Global Ideologies", style={"margin": "0"}),
             html.Div([
-                html.Label("Region", style={"fontSize": 16, "fontWeight": 600}),
+                html.Label("Region", style=SECTION_LABEL_STYLE),
                 dcc.Checklist(
                     id="region_selector",
                     options=region_options,
@@ -502,7 +504,7 @@ def build_sidebar():
                 ),
             ]),
             html.Div([
-                html.Label("Regime Type", style={"fontSize": 16, "fontWeight": 600}),
+                html.Label("Regime Type", style=SECTION_LABEL_STYLE),
                 dcc.Checklist(
                     id="democracy_selector",
                     options=democracy_options,
@@ -512,7 +514,7 @@ def build_sidebar():
                 ),
             ]),
             html.Div([
-                html.Label("Ideology", style={"fontSize": 16, "fontWeight": 600}),
+                html.Label("Ideology", style=SECTION_LABEL_STYLE),
                 dcc.Checklist(
                     id="ideology_selector",
                     options=build_ideology_options(),
@@ -522,6 +524,24 @@ def build_sidebar():
                     className="ideology-checklist",
                 ),
             ]),
+        ],
+    )
+
+
+def build_overlay(overlay_id, backdrop_id, close_id, content, modal_id=None):
+    return html.Div(
+        id=overlay_id,
+        className="summary-overlay hidden",
+        children=[
+            html.Div(id=backdrop_id, className="summary-backdrop", n_clicks=0),
+            html.Div(
+                id=modal_id,
+                className="summary-modal",
+                children=[
+                    html.Button("×", id=close_id, className="summary-close", n_clicks=0),
+                    content,
+                ],
+            ),
         ],
     )
 
@@ -536,6 +556,7 @@ MAP_CONFIG = {
     "scrollZoom": False,
 }
 TREND_CONFIG = {"displayModeBar": False, "staticPlot": True, "responsive": True}
+GRAPH_FULL_STYLE = {"width": "100%", "height": "100%"}
 
 app = Dash(__name__)
 
@@ -691,7 +712,6 @@ app.index_string = """
                 padding: 6px 10px;
                 font-size: 13px;
                 cursor: pointer;
-                text-transform: uppercase;
                 letter-spacing: 0.05em;
                 box-shadow: 0 4px 10px rgba(0,0,0,0.15);
                 border-radius: 0;
@@ -728,35 +748,19 @@ app.layout = html.Div(
     },
     children=[
         dcc.Store(id="year_confirmed", data=False),
-        html.Div(
-            id="summary_overlay",
-            className="summary-overlay hidden",
-            children=[
-                html.Div(id="summary_backdrop", className="summary-backdrop", n_clicks=0),
-                html.Div(
-                    id="summary_modal",
-                    className="summary-modal",
-                    children=[
-                        html.Button("×", id="summary_close", className="summary-close", n_clicks=0),
-                        html.Div(id="summary_modal_content", className="summary-modal-content"),
-                    ],
-                ),
-            ],
+        build_overlay(
+            overlay_id="summary_overlay",
+            backdrop_id="summary_backdrop",
+            close_id="summary_close",
+            content=html.Div(id="summary_modal_content", className="summary-modal-content"),
+            modal_id="summary_modal",
         ),
-        html.Div(
-            id="info_overlay",
-            className="summary-overlay hidden",
-            children=[
-                html.Div(id="info_backdrop", className="summary-backdrop", n_clicks=0),
-                html.Div(
-                    id="info_modal",
-                    className="summary-modal",
-                    children=[
-                        html.Button("×", id="info_close", className="summary-close", n_clicks=0),
-                        _build_info_card(),
-                    ],
-                ),
-            ],
+        build_overlay(
+            overlay_id="info_overlay",
+            backdrop_id="info_backdrop",
+            close_id="info_close",
+            content=_build_info_card(),
+            modal_id="info_modal",
         ),
         build_sidebar(),
         html.Div(
@@ -782,12 +786,9 @@ app.layout = html.Div(
                             id="world_map",
                             figure=default_world_map_fig,
                             config=MAP_CONFIG,
-                            style={
-                                "width": "100%",
-                                "height": "100%",
-                            },
+                            style=GRAPH_FULL_STYLE,
                         ),
-                        html.Button("Info", id="info_button", className="info-button", n_clicks=0),
+                        html.Button("info", id="info_button", className="info-button", n_clicks=0),
                     ],
                 ),
                 html.Div(
@@ -807,11 +808,7 @@ app.layout = html.Div(
                             id="trend_chart",
                             figure=default_trend_fig,
                             config=TREND_CONFIG,
-                            style={
-                                "flex": "1 1 auto",
-                                "width": "100%",
-                                "height": "100%",
-                            },
+                            style={"flex": "1 1 auto", **GRAPH_FULL_STYLE},
                         ),
                         html.Div(
                             style={"paddingTop": "6px"},
