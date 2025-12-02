@@ -9,10 +9,9 @@ from dash.exceptions import PreventUpdate
 from flask import send_from_directory
 
 
-# ============================================
-# Data Preparation Section
-# ============================================
-# TODO: Load the ideology dataset and prepare it for visualization
+# -------------------------------------------
+# Data Preparation 
+# -------------------------------------------
 
 # Set up file paths for the project
 BASE_DIR = Path(__file__).resolve().parent
@@ -66,9 +65,9 @@ GREY_STAGE_COLORS = {
     3: "#8c8b8b",
 }
 
-# ============================================
+# -------------------------------------------
 # Styling and Configuration Constants
-# ============================================
+# -------------------------------------------
 FONT_FAMILY = "ABCMonumentGrotesk, Arial, sans-serif"
 CHOICE_LABEL_STYLE = {
     "display": "flex",
@@ -129,9 +128,9 @@ def _year_marks(years):
 year_marks = _year_marks(available_years)
 
 
-# ============================================
-# Helper Functions - Data Processing & Utilities
-# ============================================
+# -------------------------------------------
+# Helper Functions
+# -------------------------------------------
 # These functions help clean, validate, and format data for the dashboard
 
 def _resolve_regions(selection):
@@ -588,12 +587,12 @@ def build_overlay(overlay_id, backdrop_id, close_id, content, modal_id=None):
     )
 
 
-# ============================================
+# -------------------------------------------
 # Dash Application Setup
-# ============================================
+# -------------------------------------------
 # Configure Plotly graphs and initialize the Dash web application
 
-# Graph configuration settings - hide logos and pan/zoom controls
+# Graph configuration settings 
 MAP_CONFIG = {
     "displaylogo": False,
     "displayModeBar": False,
@@ -893,9 +892,9 @@ app.layout = html.Div(
 )
 
 
-# ============================================
-# Dash Callbacks - Interactivity Handlers
-# ============================================
+# -------------------------------------------
+# Dash Callbacks - Interactivity 
+# -------------------------------------------
 # These callbacks respond to user interactions and update the dashboard
 
 # Callback 1: Track when user has selected a year
@@ -1014,9 +1013,9 @@ def update_chart(selected_regions, selected_democracy, selected_ideologies):
     return fig
 
 
-# ============================================
-# Main Entry Point
-# ============================================
+# -------------------------------------------
+# Start the app
+# -------------------------------------------
 if __name__ == "__main__":
     # Run the Dash app with debug mode enabled
     app.run(debug=True)
