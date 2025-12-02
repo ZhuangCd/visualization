@@ -9,21 +9,30 @@ from dash.exceptions import PreventUpdate
 from flask import send_from_directory
 
 
-# --------------------------------------
-# Data prep
-# --------------------------------------
+# ============================================
+# Data Preparation Section
+# ============================================
+# TODO: Load the ideology dataset and prepare it for visualization
+
+# Set up file paths for the project
 BASE_DIR = Path(__file__).resolve().parent
 DATA_FILE = BASE_DIR / "global_leader_ideologies.csv"
 FONT_DIR = (BASE_DIR / "fonts" / "monument-grotesk-font-family-1764226824-0").resolve()
 
+# Read the CSV file containing all the ideology data
 raw_df = pd.read_csv(DATA_FILE)
 
 
 def normalize_democracy(series: pd.Series) -> pd.Series:
+    """
+    Clean up democracy values in the dataset.
+    Converts all values to lowercase and standardizes them to 'yes', 'no', or 'no data'.
+    """
     normalized = series.astype(str).str.strip().str.lower()
     return normalized.where(normalized.isin(["yes", "no"]), "no data")
 
 
+# Define which columns we need for displaying summary information
 SUMMARY_COLUMNS = [
     "hog",
     "hog_party",
@@ -36,23 +45,30 @@ SUMMARY_COLUMNS = [
     "hog_right",
 ]
 
+# Create the main dataframe with selected columns
 df = raw_df.reindex(columns=["year", "hog_ideology", "region", "democracy", *SUMMARY_COLUMNS]).copy()
-df["hog_ideology"] = df["hog_ideology"].str.lower()
-df["year"] = pd.to_numeric(df["year"], errors="coerce").astype("Int64")
-df["region"] = df["region"].fillna("Unknown")
-df["democracy_flag"] = normalize_democracy(df["democracy"])
+df["hog_ideology"] = df["hog_ideology"].str.lower()  # Make ideology values lowercase
+df["year"] = pd.to_numeric(df["year"], errors="coerce").astype("Int64")  # Convert year to numeric
+df["region"] = df["region"].fillna("Unknown")  # Replace missing regions with 'Unknown'
+df["democracy_flag"] = normalize_democracy(df["democracy"])  # Normalize democracy values
 
+# Define the valid ideology types and their colors
 valid_ideologies = ["leftist", "centrist", "rightist"]
 color_map = {
-    "leftist": "#1d76db",
-    "centrist": "#b094b0",
-    "rightist": "#db231d",
+    "leftist": "#1d76db",  # Blue for leftist
+    "centrist": "#b094b0",  # Purple for centrist
+    "rightist": "#db231d",  # Red for rightist
 }
+# Greyscale colors for different filter stages
 GREY_STAGE_COLORS = {
     1: "#dcdcdc",
     2: "#b7b6b6",
     3: "#8c8b8b",
 }
+
+# ============================================
+# Styling and Configuration Constants
+# ============================================
 FONT_FAMILY = "ABCMonumentGrotesk, Arial, sans-serif"
 CHOICE_LABEL_STYLE = {
     "display": "flex",
@@ -68,6 +84,8 @@ HOVER_LABEL_STYLE = {
     "bordercolor": "#d7d7d7",
     "font": {"family": FONT_FAMILY, "color": "#111", "size": 12},
 }
+
+# Project metadata and information sections
 INFO_SECTIONS = {
     "Project name": "Ideology Atlas",
     "Research questions": "How do geography, regime type, and ideology intersect across modern leadership history?",
@@ -76,21 +94,28 @@ INFO_SECTIONS = {
 }
 DATASET_SOURCE_URL = "https://github.com/bastianherre/global-leader-ideologies"
 
+# Prepare the map dataframe - specific columns for world map visualization
 map_df = raw_df.reindex(
     columns=["country_name", "hog_ideology", "year", "region", "democracy", *SUMMARY_COLUMNS]
 ).copy()
 map_df["hog_ideology"] = map_df["hog_ideology"].str.lower()
 map_df["year"] = pd.to_numeric(map_df["year"], errors="coerce").astype("Int64")
-map_df = map_df[map_df["hog_ideology"].isin(valid_ideologies)]
+map_df = map_df[map_df["hog_ideology"].isin(valid_ideologies)]  # Keep only valid ideologies
 map_df["democracy_flag"] = normalize_democracy(map_df["democracy"])
+# Remove duplicate country-year entries, keeping the most recent
 map_df = map_df.drop_duplicates(subset=["country_name", "year"], keep="last")
 
+# Get available years for the slider
 available_years = sorted(map_df["year"].dropna().unique())
 min_year = int(available_years[0]) if available_years else None
 max_year = int(available_years[-1]) if available_years else None
 
 
 def _year_marks(years):
+    """
+    Create year labels for the slider.
+    Only shows first year, last year, and every 10 years to avoid crowding.
+    """
     if not years:
         return {}
     first, last = years[0], years[-1]
@@ -104,20 +129,28 @@ def _year_marks(years):
 year_marks = _year_marks(available_years)
 
 
-# --------------------------------------
-# Helpers
-# --------------------------------------
+# ============================================
+# Helper Functions - Data Processing & Utilities
+# ============================================
+# These functions help clean, validate, and format data for the dashboard
+
 def _resolve_regions(selection):
+    """Filter regions - returns None if 'all' is selected (no filtering)."""
     if not selection or "all" in selection:
         return None
     return selection
 
 
 def _resolve_ideologies(selection):
+    """Filter ideologies - only keep valid ones from the list."""
     return [ide for ide in selection or [] if ide in valid_ideologies]
 
 
 def _apply_multi_filter(frame, column, values):
+    """
+    Filter a dataframe based on column values.
+    Returns empty dataframe if values is empty list, original if None.
+    """
     if values is None:
         return frame
     if not values:
@@ -126,6 +159,7 @@ def _apply_multi_filter(frame, column, values):
 
 
 def _is_one(value) -> bool:
+    """Check if a value equals 1.0 (handles NaN and type conversion)."""
     if pd.isna(value):
         return False
     try:
@@ -135,6 +169,10 @@ def _is_one(value) -> bool:
 
 
 def _safe_text(value, fallback="Unknown"):
+    """
+    Safely convert any value to text.
+    Returns fallback string for None, empty strings, or NaN values.
+    """
     if value is None:
         return fallback
     if isinstance(value, str):
@@ -151,6 +189,7 @@ def _safe_text(value, fallback="Unknown"):
 
 
 def _format_democracy(row):
+    """Format democracy field for display - converts to 'Democracy' or 'Non-democracy'."""
     value = row.get("democracy_flag")
     if value in (None, "no data"):
         value = row.get("democracy")
@@ -165,6 +204,7 @@ def _format_democracy(row):
 
 
 def _political_leaning(row):
+    """Determine the political leaning based on left/center/right flags."""
     if _is_one(row.get("hog_left")):
         return "Left"
     if _is_one(row.get("hog_center")):
@@ -178,6 +218,7 @@ def _political_leaning(row):
 
 
 def _pref_value(row, primary, fallback):
+    """Get preferred value from a row - use primary field, fallback to alternative if empty."""
     value = row.get(primary)
     if value is None or (isinstance(value, str) and not value.strip()):
         value = row.get(fallback)
@@ -185,6 +226,7 @@ def _pref_value(row, primary, fallback):
 
 
 def _extract_summary_row(country, year):
+    """Find and return the data row for a specific country and year."""
     if not country or year is None:
         return None
     country_lower = str(country).strip().lower()
@@ -546,9 +588,12 @@ def build_overlay(overlay_id, backdrop_id, close_id, content, modal_id=None):
     )
 
 
-# --------------------------------------
-# Dash app
-# --------------------------------------
+# ============================================
+# Dash Application Setup
+# ============================================
+# Configure Plotly graphs and initialize the Dash web application
+
+# Graph configuration settings - hide logos and pan/zoom controls
 MAP_CONFIG = {
     "displaylogo": False,
     "displayModeBar": False,
@@ -558,12 +603,17 @@ MAP_CONFIG = {
 TREND_CONFIG = {"displayModeBar": False, "staticPlot": True, "responsive": True}
 GRAPH_FULL_STYLE = {"width": "100%", "height": "100%"}
 
+# Create the Dash app instance
 app = Dash(__name__)
 
 
+# Route for serving custom fonts
 @app.server.route("/fonts/<path:filename>")
 def serve_font(filename):
+    """Serve custom font files from the fonts directory."""
     return send_from_directory(FONT_DIR, filename)
+
+# Custom HTML template for the app - defines the structure of the index page
 app.index_string = """
 <!DOCTYPE html>
 <html lang=\"en\" style=\"height:100%; overflow:hidden;\">
@@ -573,6 +623,7 @@ app.index_string = """
         {%favicon%}
         {%css%}
         <style>
+            /* Import custom fonts */
             @font-face {
                 font-family: "ABCMonumentGrotesk";
                 src: url("/fonts/ABCMonumentGrotesk-Regular-Trial.otf") format("opentype");
@@ -589,6 +640,7 @@ app.index_string = """
                 font-display: swap;
             }
 
+            /* Styling for overlay modals (summary and info) */
             .summary-overlay {
                 position: fixed;
                 top: 0;
@@ -841,16 +893,21 @@ app.layout = html.Div(
 )
 
 
-# --------------------------------------
-# Callbacks
-# --------------------------------------
+# ============================================
+# Dash Callbacks - Interactivity Handlers
+# ============================================
+# These callbacks respond to user interactions and update the dashboard
+
+# Callback 1: Track when user has selected a year
 @app.callback(Output("year_confirmed", "data"), Input("year_slider", "value"))
 def flag_year_confirmation(selected_year):
+    """Set flag to True once user has interacted with the year slider."""
     if ctx.triggered_id is None:
         return False
     return True
 
 
+# Callback 2: Toggle the information modal overlay
 @app.callback(
     Output("info_overlay", "className"),
     Input("info_button", "n_clicks"),
@@ -859,6 +916,7 @@ def flag_year_confirmation(selected_year):
     prevent_initial_call=True,
 )
 def toggle_info_modal(info_click, close_click, backdrop_click):
+    """Open/close info modal when user clicks info button, close button, or backdrop."""
     trigger = ctx.triggered_id
     if trigger in {"info_close", "info_backdrop"}:
         return "summary-overlay hidden"
@@ -867,6 +925,7 @@ def toggle_info_modal(info_click, close_click, backdrop_click):
     raise PreventUpdate
 
 
+# Callback 3: Show summary modal when user clicks on a country in the map
 @app.callback(
     Output("summary_modal_content", "children"),
     Output("summary_overlay", "className"),
@@ -877,12 +936,14 @@ def toggle_info_modal(info_click, close_click, backdrop_click):
     prevent_initial_call=True,
 )
 def toggle_summary_modal(click_data, close_clicks, backdrop_clicks, selected_year):
+    """Display country information when clicked on map, or close modal when user clicks close/backdrop."""
     trigger = ctx.triggered_id
 
     if trigger in {"summary_close", "summary_backdrop"}:
         return [], "summary-overlay hidden"
 
     if trigger == "world_map" and click_data:
+        # Extract country name and year from click event
         point = (click_data.get("points") or [{}])[0]
         country = point.get("location") or point.get("hovertext")
         year_value = int(selected_year) if selected_year is not None else None
@@ -893,6 +954,7 @@ def toggle_summary_modal(click_data, close_clicks, backdrop_clicks, selected_yea
     raise PreventUpdate
 
 
+# Callback 4: Update world map based on all filter selections
 @app.callback(
     Output("world_map", "figure"),
     Input("region_selector", "value"),
@@ -902,11 +964,20 @@ def toggle_summary_modal(click_data, close_clicks, backdrop_clicks, selected_yea
     Input("year_confirmed", "data"),
 )
 def update_world_map(selected_regions, selected_democracy, selected_year, selected_ideologies, year_confirmed):
+    """
+    Regenerate world map visualization when filters change.
+    Only shows full color map when user has locked a year (year_confirmed=True).
+    """
     regions = _resolve_regions(selected_regions)
     has_region_selection = bool(selected_regions)
     ideology_filters = _resolve_ideologies(selected_ideologies)
+    
+    # Determine completion stage (1-4) based on what user has selected
     stage = _compute_stage(has_region_selection, selected_democracy, ideology_filters, year_confirmed)
+    
+    # Only apply year filter when at final stage and year is confirmed
     year_value = int(selected_year) if (stage == 4 and selected_year is not None) else None
+    
     return make_world_map(
         stage,
         regions,
@@ -917,6 +988,7 @@ def update_world_map(selected_regions, selected_democracy, selected_year, select
     )
 
 
+# Callback 5: Update trend chart based on region, democracy, and ideology filters
 @app.callback(
     Output("trend_chart", "figure"),
     Input("region_selector", "value"),
@@ -924,15 +996,28 @@ def update_world_map(selected_regions, selected_democracy, selected_year, select
     Input("ideology_selector", "value"),
 )
 def update_chart(selected_regions, selected_democracy, selected_ideologies):
+    """
+    Regenerate trend chart showing ideology distribution over time.
+    Filters data by selected regions and democracy status.
+    """
     filtered = df
     regions = _resolve_regions(selected_regions)
+    
+    # Apply region filter
     if regions:
         filtered = filtered[filtered["region"].isin(regions)]
+    
+    # Apply democracy filter
     filtered = _apply_multi_filter(filtered, "democracy_flag", selected_democracy)
 
     fig = make_trend_chart(filtered, selected_ideologies)
     return fig
 
 
+# ============================================
+# Main Entry Point
+# ============================================
 if __name__ == "__main__":
+    # Run the Dash app with debug mode enabled
     app.run(debug=True)
+
