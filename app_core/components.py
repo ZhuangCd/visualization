@@ -61,7 +61,7 @@ def build_sidebar(regions, ideology_options):
             "boxSizing": "border-box",
         },
         children=[
-            html.H3("Global Ideologies", style={"margin": "0"}),
+            html.H3("Ideology Atlas", style={"margin": "0"}),
             html.Div(
                 [
                     html.Label("Region", style=SECTION_LABEL_STYLE),
