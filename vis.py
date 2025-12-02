@@ -720,6 +720,14 @@ app.index_string = """
             .info-button:hover {
                 background: #f5f5f5;
             }
+
+            #sidebar {
+                box-shadow: none !important;
+            }
+
+            #histogram_container {
+                box-shadow: none !important;
+            }
         </style>
     </head>
     <body style=\"margin:0; height:100%; overflow:hidden;\">
