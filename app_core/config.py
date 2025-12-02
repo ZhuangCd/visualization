@@ -44,7 +44,7 @@ HOVER_LABEL_STYLE = {
     "font": {"family": FONT_FAMILY, "color": "#111", "size": 12},
 }
 INFO_SECTIONS = {
-    "Project name": "Global Ideology Explorer",
+    "Project name": "Ideology Atlas",
     "Research questions": "How do geography, regime type, and ideology intersect across modern leadership history?",
     "Sources": "https://www.ippapublicpolicy.org/file/paper/60c247759f1df.pdf",
     "Made by": "William Kosse, Márton Berettyán, Nóra Balogh",
