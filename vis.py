@@ -69,7 +69,7 @@ HOVER_LABEL_STYLE = {
     "font": {"family": FONT_FAMILY, "color": "#111", "size": 12},
 }
 INFO_SECTIONS = {
-    "Project name": "Global Ideology Explorer",
+    "Project name": "Ideology Atlas",
     "Research questions": "How do geography, regime type, and ideology intersect across modern leadership history?",
     "Sources": "https://www.ippapublicpolicy.org/file/paper/60c247759f1df.pdf",
     "Made by": "William Kosse, Márton Berettyán, Nóra Balogh",
@@ -492,7 +492,7 @@ def build_sidebar():
             "boxSizing": "border-box",
         },
         children=[
-            html.H2("Global Ideologies", style={"margin": "0"}),
+            html.H3("Ideology Atlas", style={"margin": "0"}),
             html.Div([
                 html.Label("Region", style=SECTION_LABEL_STYLE),
                 dcc.Checklist(
