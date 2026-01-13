@@ -1,8 +1,11 @@
 # Global Ideology Explorer
 
+[Final project report (PDF)](report.pdf)
+
 An interactive web application visualizing political leadership ideologies across the globe from 1945-2019.
 
 [🌎 The Global Leader Ideology Dataset (Kaggle)](https://www.kaggle.com/datasets/mexwell/the-global-leader-ideology-dataset)
+
 
 ## Setup Instructions
 
